@@ -13,6 +13,8 @@ class logicUnit(object):
     def __init__(self):
         self.input_list = {}
         self.output_list = {}
+        self.input_key = []
+        self.output_key = []
 
     def input_signal(self,**kwargs):
         """
@@ -22,6 +24,9 @@ class logicUnit(object):
         """
         for key in kwargs:
             self.input_list[key] = kwargs[key]
+
+        # 输入信号后马上检查是否缺失输入
+        self.check_input()
 
     def output_signal(self):
         """
@@ -36,6 +41,11 @@ class logicUnit(object):
         :return:
         """
         pass
+
+    def check_input(self):
+        for key in self.input_key:
+            if key not in self.input_list:
+                raise Exception("%s not in %s input_list"%(key,self.__class__.__name__))
 
 
 class timerUnit(logicUnit):

@@ -5,6 +5,12 @@
 """
 
 from basic_unit import *
+from Command import byte2command
+from utils import *
+
+"""
+stage 1
+"""
 
 class Split(logicUnit):
     """
@@ -48,15 +54,16 @@ class Align(logicUnit):
         self.rA = '0'
         self.rB = '0'
         self.valC = '0000000000000000'
-        self.input_key = ["program_data"]
+        self.input_key = ["program_data","need_regids"]
         self.output_key = ["rA","rB","valC"]
 
     def exc_logic(self):
-        if "program_data" not in self.input_list:
-            raise Exception("program_data not in Align input_list")
-
-        byte = self.input_list["program_data"][1]
-        valC_list = self.input_list["program_data"][2:]
+        if self.input_list["need_regids"]:
+            byte = self.input_list["program_data"][1]
+            valC_list = self.input_list["program_data"][2:10]
+        else:
+            byte = 'FF'
+            valC_list = self.input_list["program_data"][1:9]
         self.rA = byte[0]
         self.rB = byte[1]
         self.valC = ""
@@ -78,3 +85,253 @@ class instr_valid(logicUnit):
             self.output_list["instr_valid"] = True
         else:
             self.output_list["instr_valid"] = False
+
+class Need_valC(logicUnit):
+    """
+    判断指令是否需要直接数
+    """
+
+    def __init__(self):
+        super(Need_valC,self).__init__()
+        self.input_key = ["icode"]
+        self.output_key = ["need_valC"]
+
+    def exc_logic(self):
+        if self.input_list['icode'] not in byte2command:
+            # 指令不合法，直接置为False
+            self.output_list['need_valC'] = False
+        else:
+            command_name = byte2command[self.input_list['icode']]
+            # 只有下面这些指令用得到直接数
+            self.output_list["need_valC"] = \
+                command_name in ['IIRMOVQ','IRMMOVQ','IMRMOVQ','IJXX','ICALL']
+
+
+class Need_regids(logicUnit):
+    """
+    判断指令是否需要寄存器
+    """
+
+    def __init__(self):
+        super(Need_regids,self).__init__()
+        self.input_key = ['icode']
+        self.output_key = ['need_regids']
+
+    def exc_logic(self):
+        if self.input_list["icode"] not in byte2command:
+            self.output_list["need_regids"] = False
+        else:
+            command_name = byte2command[self.input_list['icode']]
+            self.output_list["need_regids"] = \
+                command_name in ['IRRMOVQ','IOPQ','IPUSHQ','IPOPQ','IIRMOVQ','IRMMOVQ','IMRMOVQ']
+
+class PC_Increment(logicUnit):
+    """
+    PC增加器
+    """
+
+    def __init__(self):
+        super(PC_Increment,self).__init__()
+        self.input_key = ["need_valC",'need_regids','PC']
+        self.output_key = ['valP']
+
+    def exc_logic(self):
+
+        r = int(self.input_list["need_valC"])
+        i = int(self.input_list["need_regids"])
+        p = int(self.input_list["PC"],16)
+        valP = p + 1 + r + 8*i
+        self.output_list["valP"] = hex(valP)
+
+
+"""
+stage 2
+"""
+
+class dstE(logicUnit):
+    """
+    寄存器文件的其中一个写入地址
+    """
+
+    def __init__(self):
+        super(dstE,self).__init__()
+        self.input_key = ["Cnd","icode","rB"]
+        self.output_key = ["dstE"]
+        # 默认值不写入任何寄存器
+        self.dstE = 'F'
+
+    def exc_logic(self):
+
+        command_name = byte2command[self.input_list["icode"]]
+        if command_name == "IRRMOVQ" and self.input_list["Cnd"]:
+            self.dstE = self.input_list['rB']
+        if command_name in ['IIRMOVQ','IOPQ']:
+            self.dstE = self.input_list['rB']
+        if command_name in ['IPUSHQ','IPOPQ','ICALL','IRET']:
+            # %rsp
+            self.dstE = '4'
+        self.output_list["dstE"] = self.dstE
+
+class dstM(logicUnit):
+
+    def __init__(self):
+        super(dstM,self).__init__()
+        self.input_key = ["icode",'rA']
+        self.output_key = ['dstM']
+        self.dstM = 'F'
+
+    def exc_logic(self):
+
+        command_name = byte2command[self.input_list['icode']]
+        if command_name in ['IMRMOVQ','IPOPQ']:
+            self.dstM = self.input_list['rA']
+
+        self.output_list["dstM"] = self.dstM
+
+
+class srcA(logicUnit):
+
+    def __init__(self):
+        super(srcA,self).__init__()
+        self.input_key = ['icode','rA']
+        self.output_key = ['srcA']
+        self.srcA = 'F'
+
+    def exc_logic(self):
+
+        command_name = byte2command[self.input_list['icode']]
+        if command_name in ['IRRMOVQ','IRMMOVQ','IOPQ','IPUSHQ']:
+            self.srcA = self.input_list['rA']
+        if command_name in ['IPOPQ','IRET']:
+            self.srcA = '4'
+        self.output_list['srcA'] = self.srcA
+
+
+class srcB(logicUnit):
+
+    def __init__(self):
+        super(srcB,self).__init__()
+        self.input_key = ['icode','rB']
+        self.output_key = ['srcB']
+        self.srcB = 'F'
+
+    def exc_logic(self):
+        command_name = byte2command[self.input_list['icode']]
+        if command_name in ['IOPQ','IRMMOVQ','IMRMOVQ']:
+            self.srcB = self.input_list['rB']
+        if command_name in ['IPUSHQ','IPOPQ','ICALL','IRET']:
+            self.srcB = '4'
+
+        self.output_list['srcB'] = self.srcB
+
+
+class SetCC(logicUnit):
+    """
+    判断是否需要设置标志位的逻辑
+    """
+    def __init__(self):
+        super(SetCC,self).__init__()
+        self.input_key = ['icode']
+        self.output_key = ['set_cc']
+
+    def exc_logic(self):
+        command_name = byte2command[self.input_list["icode"]]
+        self.output_list['set_cc'] = command_name == 'IOPQ'
+
+class ALU(logicUnit):
+    """
+    ALU单元实现,第一个操作数是B，第二个是A，都是八字节数
+    """
+    def __init__(self):
+        super(ALU,self).__init__()
+        self.input_key = ['aluA','aluB','alufun']
+        self.output_key = ['valE','ZF','SF','OF']
+        self.B = 0
+        self.A = 0
+        self.fun = 0
+        self.max_overflow = (1<<64) - 1
+        self.min_overflow = -(1<<64)
+        self.ZF = False
+        self.SF = False
+        self.OF = False
+
+    def exc_logic(self):
+        valE = 0
+        self.B = convert64(self.input_list["aluB"])
+        self.A = convert64(self.input_list["aluA"])
+        self.fun = self.input_list["alufun"]
+        if self.fun == '0':
+            valE = self.B + self.A
+        if self.fun == '1':
+            valE = self.B - self.A
+        if self.fun == '2':
+            valE = self.B & self.A
+        if self.fun == '3':
+            valE = self.B ^ self.A
+        if valE == 0:
+            self.OF = True
+        if valE < 0:
+            self.SF = True
+        if valE > self.max_overflow or valE < self.min_overflow:
+            self.OF = True
+            # 溢出处理，不过对负溢出可能有问题
+            valE = valE & 0xFFFFFFFFFFFFFFFF
+
+        self.output_list["valE"] = valE
+
+
+
+
+class aluA(logicUnit):
+    """
+    alu的第二个操作数
+    """
+    def __init__(self):
+        super(aluA,self).__init__()
+        self.input_key = ['icode','valC','valA']
+        self.output_key = ['aluA']
+        self.alu_A = ''
+
+    def exc_logic(self):
+        command_name = byte2command[self.input_list['icode']]
+        if command_name in ["IRRMOVQ",'IOPQ']:
+            self.alu_A = self.input_list["valA"]
+        if command_name in ["IIRMOVQ",'IRMMOVQ','IMRMOVQ']:
+            self.alu_A = self.input_list['valC']
+        if command_name in ['ICALL','IPUSHQ']:
+            self.alu_A = convert2hex(-8)
+        if command_name in ['IRET','IPOPQ']:
+            self.alu_A = convert2hex(8)
+        self.output_list['aluA'] = self.alu_A
+
+class aluB(logicUnit):
+    """
+    alu的第一个操作数
+    """
+    def __init__(self):
+        super(aluB,self).__init__()
+        self.input_key = ["icode",'valB']
+        self.output_key = ['aluB']
+        self.aluB = ''
+
+    def exc_logic(self):
+        command_name = byte2command[self.input_list["icode"]]
+        if command_name in ['IRMMOVQ','IMRMOVQ','IOPQ','ICALL','IPUSHQ','IRET','IPOPQ']:
+            self.aluB = self.input_list["valB"]
+        if command_name in ["IRRMOVQ",'IIRMOVQ']:
+            self.aluB = '0'
+        self.output_list["aluB"] = self.aluB
+
+
+class ALUfun(logicUnit):
+
+    def __init__(self):
+        super(ALUfun,self).__init__()
+        self.input_key = ['icode','ifun']
+        self.output_key = ["alufun"]
+
+    def exc_logic(self):
+        if self.input_list['icode'] == '6':
+            self.output_list['alufun'] = self.input_list['ifun']
+        else:
+            self.output_list['alufun'] = '0'

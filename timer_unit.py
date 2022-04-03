@@ -44,6 +44,7 @@ class statusRegister(timerUnit):
         self.SF = False
         # 溢出标志 代表上一次算术操作导致一个补码溢出
         self.OF = False
+        self.input_key = ['ZF','SF','OF','set_cc']
 
     def low2high(self):
         """
@@ -62,7 +63,8 @@ class statusRegister(timerUnit):
         for key in self.input_list:
             if not getattr(self,key):
                 raise Exception("%s not in statusRegister input_list"%(key))
-            setattr(self,key,self.input_list[key])
+            if self.input_list["set_cc"]:
+                setattr(self,key,self.input_list[key])
 
 
 class dataMemory(timerUnit):

@@ -14,10 +14,10 @@ class mother_board(object):
         # 硬件实例化，保证每一个硬件只有一个对象，通过字典定位
         self.logic_comp = {}
         for logic_class in self.logic_comp_list:
-            self.logic_comp[logic_class.__str__] = logic_class()
+            self.logic_comp[logic_class.__name__] = logic_class()
         self.timer_comp = {}
         for timer_class in self.timer_comp_list:
-            self.timer_comp[timer_class.__str__] = timer_class()
+            self.timer_comp[timer_class.__name__] = timer_class()
         # 所有线路的名称，方便展示
         self.mother_line = ["PC","icode","ifun","rA","rB","valC","valP","valA","valB",'dstE',"dstM","srcA","srcB","valE",
                             "Cnd","valM","Stat","instr_valid","imem_error","dmem_error","need_valC","need_regids","set_cc",
@@ -57,6 +57,7 @@ class mother_board(object):
                 self.last_data[attr] = getattr(self,attr)
                 dirty_value.append((attr,getattr(self,attr)))
             elif self.last_data[attr] != getattr(self,attr):
+                self.last_data[attr] = getattr(self,attr)
                 dirty_value.append((attr,getattr(self,attr)))
             else:
                 clean_value.append((attr,getattr(self,attr)))
@@ -64,14 +65,22 @@ class mother_board(object):
         dirty = ""
         clean = ""
         for attr_name,attr_value in dirty_value:
-            dirty += "%s:%s"%(attr_name,attr_value)
+            dirty += "%s:%s "%(attr_name,attr_value)
         for attr_name,attr_value in clean_value:
-            clean += "%s:%s"%(attr_name,attr_value)
+            clean += "%s:%s "%(attr_name,attr_value)
 
         print "变化的值如下："
         print dirty
-        print "没有变化的值如下"
+        print "没有变化的值如下:"
         print clean
+
+    def display_mem(self):
+        print "内存值如下："
+        print self.timer_comp["dataMemory"].memory
+
+    def display_reg(self):
+        print "寄存器值如下："
+        print self.timer_comp["registerFile"].register_memory
 
     def pause(self):
         a = raw_input()
@@ -83,7 +92,7 @@ class mother_board(object):
         """
 
         # 暂时，当状态为HALT时停止运行
-        while(self.Stat != "4"):
+        while(self.Stat != 4):
             # 时钟周期开始的上升沿
             # 第一阶段 取指
             self.timer_comp["programCounter"].switch_state()
@@ -139,17 +148,17 @@ class mother_board(object):
             # 第三阶段 执行
             self.logic_comp["SetCC"].input_signal(icode=self.icode)
             self.set_cc = self.logic_comp["SetCC"].output_signal()["set_cc"]
-            self.logic_comp["aluA"].input_singal(icode=self.icode,valC=self.valC,valA=self.valA)
+            self.logic_comp["aluA"].input_signal(icode=self.icode,valC=self.valC,valA=self.valA)
             self.aluA = self.logic_comp["aluA"].output_signal()["aluA"]
             self.logic_comp["aluB"].input_signal(icode=self.icode,valB=self.valB)
             self.aluB = self.logic_comp["aluB"].output_signal()["aluB"]
             self.logic_comp["ALUfun"].input_signal(icode=self.icode,ifun=self.ifun)
             self.alufun = self.logic_comp["ALUfun"].output_signal()["alufun"]
             self.logic_comp["ALU"].input_signal(aluA=self.aluA,aluB=self.aluB,alufun=self.alufun)
-            self.valE = self.logic_comp["ALU"].output_singal()["valE"]
-            self.ZF = self.logic_comp["ALU"].output_singal()["ZF"]
-            self.OF = self.logic_comp["ALU"].output_singal()["OF"]
-            self.SF = self.logic_comp["ALU"].output_singal()["SF"]
+            self.valE = self.logic_comp["ALU"].output_signal()["valE"]
+            self.ZF = self.logic_comp["ALU"].output_signal()["ZF"]
+            self.OF = self.logic_comp["ALU"].output_signal()["OF"]
+            self.SF = self.logic_comp["ALU"].output_signal()["SF"]
             self.timer_comp["statusRegister"].input_signal(ZF=self.ZF,OF=self.OF,SF=self.SF,set_cc=self.set_cc)
             self.timer_comp["statusRegister"].switch_state()
             self.ZF = self.timer_comp["statusRegister"].output_signal()["ZF"]
@@ -165,22 +174,23 @@ class mother_board(object):
             # 第四阶段 访存
             self.logic_comp["memRead"].input_signal(icode=self.icode)
             self.mem_read = self.logic_comp["memRead"].output_signal()["mem_read"]
-            self.logic_comp["memWrite"].input_singal(icode=self.icode)
+            self.logic_comp["memWrite"].input_signal(icode=self.icode)
             self.mem_write = self.logic_comp["memWrite"].output_signal()["mem_write"]
-            self.logic_comp["memAddr"].input_singal(icode=self.icode,valE=self.valE,valA=self.valA)
+            self.logic_comp["memAddr"].input_signal(icode=self.icode,valE=self.valE,valA=self.valA)
             self.mem_addr = self.logic_comp["memAddr"].output_signal()["mem_addr"]
-            self.logic_comp["memData"].input_singal(icode=self.icode,valA = self.valA,valP=self.valP)
-            self.mem_data = self.logic_comp["memData"].output_singal()["mem_data"]
-            self.timer_comp["dataMemory"].input_singal(read_flag=self.mem_read,write_flag=self.mem_write,
+            self.logic_comp["memData"].input_signal(icode=self.icode,valA = self.valA,valP=self.valP)
+            self.mem_data = self.logic_comp["memData"].output_signal()["mem_data"]
+            self.timer_comp["dataMemory"].input_signal(read_flag=self.mem_read,write_flag=self.mem_write,
                                                        mem_addr = self.mem_addr,mem_data=self.mem_data)
             self.timer_comp["dataMemory"].switch_state()
-            self.valM = self.timer_comp["dataMemory"].output_singal()["valM"]
-            self.dmem_error = self.timer_comp["dataMemory"].output_singal()["dmem_error"]
-            self.logic_comp["Stat"].input_singal(imem_error=self.imem_error,dmem_error=self.dmem_error,icode=self.icode,instr_valid=self.instr_valid)
+            self.valM = self.timer_comp["dataMemory"].output_signal()["valM"]
+            self.dmem_error = self.timer_comp["dataMemory"].output_signal()["dmem_error"]
+            self.logic_comp["Stat"].input_signal(imem_error=self.imem_error,dmem_error=self.dmem_error,icode=self.icode,instr_valid=self.instr_valid)
             self.Stat = self.logic_comp["Stat"].output_signal()["Stat"]
 
             print "阶段4："
             self.display()
+            self.display_mem()
             self.pause()
 
             # 第五阶段 写回
@@ -207,11 +217,12 @@ class mother_board(object):
 
             print "阶段5："
             self.display()
+            self.display_reg()
             self.pause()
 
             # 第六阶段 更新PC
-            self.logic_comp["newPC"].input_singal(icode=self.icode,Cnd=self.Cnd,valC=self.valC,valM=self.valM,valP=self.valP)
-            self.new_pc = self.logic_comp["newPC"].output_singal()["new_pc"]
+            self.logic_comp["newPC"].input_signal(icode=self.icode,Cnd=self.Cnd,valC=self.valC,valM=self.valM,valP=self.valP)
+            self.new_pc = self.logic_comp["newPC"].output_signal()["new_pc"]
             # 将新的PC写入寄存器
             self.timer_comp["programCounter"].input_signal(PC=self.new_pc)
             self.timer_comp["programCounter"].switch_state()

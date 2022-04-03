@@ -1,6 +1,8 @@
-
+# encoding:utf-8
 
 def convert64(bits):
+    if len(bits) == 0:
+        return 0
     ret = 0
     sign = int(bits[0],16) > 7
     index = 0
@@ -18,7 +20,13 @@ def convert64(bits):
 
 def convert2hex(number):
     if number >= 0:
-        return hex(number)
+        base = list(hex(number))[2:]
+        if base[-1] == 'L':
+            base = base[:-1]
+        # 补齐16位
+        while len(base) < 16:
+            base.insert(0,'0')
+        return "".join(base)
     else:
         base = list(hex(number+(1<<63)))
         base[2] = hex(int(base[2],16)+8)
@@ -30,6 +38,6 @@ def convert2hex(number):
 
 
 if __name__ == "__main__":
-    test = "FFFFFFFFFFFFFFFF"
-    number = -3
-    print convert2hex(number)
+    test = "0000000000000003"
+    number = 3
+    print convert2hex(8)

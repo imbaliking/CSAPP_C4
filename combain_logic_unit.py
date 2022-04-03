@@ -67,8 +67,12 @@ class Align(logicUnit):
         self.rA = byte[0]
         self.rB = byte[1]
         self.valC = ""
-        for single_byte in valC_list:
+        # 小端序，所以在读取时要倒序
+        for single_byte in valC_list[-1::-1]:
             self.valC += single_byte
+        self.output_list["rA"] = self.rA
+        self.output_list["rB"] = self.rB
+        self.output_list["valC"] = self.valC
 
 class instr_valid(logicUnit):
     """
@@ -81,7 +85,7 @@ class instr_valid(logicUnit):
         self.output_key = ["instr_valid"]
 
     def exc_logic(self):
-        if int(self.input_list["icode"],16) > 11:
+        if int(self.input_list["icode"],16) <= 11:
             self.output_list["instr_valid"] = True
         else:
             self.output_list["instr_valid"] = False
@@ -137,8 +141,8 @@ class PC_Increment(logicUnit):
 
     def exc_logic(self):
 
-        r = int(self.input_list["need_valC"])
-        i = int(self.input_list["need_regids"])
+        i = int(self.input_list["need_valC"])
+        r = int(self.input_list["need_regids"])
         p = int(self.input_list["PC"],16)
         valP = p + 1 + r + 8*i
         self.output_list["valP"] = hex(valP)
@@ -162,6 +166,7 @@ class dstE(logicUnit):
 
     def exc_logic(self):
 
+        self.dstE = 'F'
         command_name = byte2command[self.input_list["icode"]]
         if command_name == "IRRMOVQ" and self.input_list["Cnd"]:
             self.dstE = self.input_list['rB']
@@ -182,6 +187,7 @@ class dstM(logicUnit):
 
     def exc_logic(self):
 
+        self.dstM = 'F'
         command_name = byte2command[self.input_list['icode']]
         if command_name in ['IMRMOVQ','IPOPQ']:
             self.dstM = self.input_list['rA']
@@ -199,6 +205,7 @@ class srcA(logicUnit):
 
     def exc_logic(self):
 
+        self.srcA = 'F'
         command_name = byte2command[self.input_list['icode']]
         if command_name in ['IRRMOVQ','IRMMOVQ','IOPQ','IPUSHQ']:
             self.srcA = self.input_list['rA']
@@ -216,6 +223,7 @@ class srcB(logicUnit):
         self.srcB = 'F'
 
     def exc_logic(self):
+        self.srcB = 'F'
         command_name = byte2command[self.input_list['icode']]
         if command_name in ['IOPQ','IRMMOVQ','IMRMOVQ']:
             self.srcB = self.input_list['rB']
@@ -260,6 +268,9 @@ class ALU(logicUnit):
 
     def exc_logic(self):
         valE = 0
+        self.ZF = False
+        self.SF = False
+        self.OF = False
         self.B = convert64(self.input_list["aluB"])
         self.A = convert64(self.input_list["aluA"])
         self.fun = self.input_list["alufun"]
@@ -280,7 +291,10 @@ class ALU(logicUnit):
             # 溢出处理，不过对负溢出可能有问题
             valE = valE & 0xFFFFFFFFFFFFFFFF
 
-        self.output_list["valE"] = valE
+        self.output_list["valE"] = convert2hex(valE)
+        self.output_list["ZF"] = self.ZF
+        self.output_list["OF"] = self.OF
+        self.output_list["SF"] = self.SF
 
 
 class aluA(logicUnit):
@@ -294,6 +308,8 @@ class aluA(logicUnit):
         self.alu_A = ''
 
     def exc_logic(self):
+
+        self.alu_A = ''
         command_name = byte2command[self.input_list['icode']]
         if command_name in ["IRRMOVQ",'IOPQ']:
             self.alu_A = self.input_list["valA"]
@@ -316,6 +332,7 @@ class aluB(logicUnit):
         self.aluB = ''
 
     def exc_logic(self):
+        self.aluB = ''
         command_name = byte2command[self.input_list["icode"]]
         if command_name in ['IRMMOVQ','IMRMOVQ','IOPQ','ICALL','IPUSHQ','IRET','IPOPQ']:
             self.aluB = self.input_list["valB"]
@@ -347,6 +364,7 @@ class Cond(logicUnit):
         self.cnd = False
 
     def exc_logic(self):
+        self.cnd = False
         self.ZF = self.input_list["ZF"]
         self.SF = self.input_list["SF"]
         self.OF = self.input_list["OF"]
@@ -405,6 +423,7 @@ class memAddr(logicUnit):
         self.addr = ""
 
     def exc_logic(self):
+        self.addr = ""
         command_name = byte2command[self.input_list["icode"]]
         if command_name in ["IRMMOVQ","IPUSHQ","ICALL","IMRMOVQ"]:
             self.addr = self.input_list["valE"]
@@ -422,6 +441,7 @@ class memData(logicUnit):
         self.data = ""
 
     def exc_logic(self):
+        self.data = ""
         command_name = byte2command[self.input_list["icode"]]
         if command_name in ["IRMMOVQ","IPUSHQ"]:
             self.data = self.input_list["valA"]
@@ -438,13 +458,14 @@ class Stat(logicUnit):
         self.stat = 0
 
     def exc_logic(self):
+        self.stat = 0
         if self.input_list["imem_error"] | self.input_list["dmem_error"]:
             self.stat = 2
         if not self.input_list["instr_valid"]:
             self.stat = 3
         if byte2command[self.input_list["icode"]] == "IHALT":
             self.stat = 4
-        self.output_list["SAOK"] = self.stat
+        self.output_list["Stat"] = self.stat
 
 
 """
@@ -460,15 +481,16 @@ class newPC(logicUnit):
         self.pc = ""
 
     def exc_logic(self):
+        self.pc = ""
         command_name = byte2command[self.input_list["icode"]]
         self.pc = self.input_list["valP"]
         if command_name == "ICALL":
-            self.pc = self.output_list["valC"]
+            self.pc = self.input_list["valC"]
 
         if command_name == "IJXX" and self.input_list["Cnd"]:
-            self.pc = self.output_list["valC"]
+            self.pc = self.input_list["valC"]
 
         if command_name == "IRET":
-            self.pc = self.output_list["valM"]
+            self.pc = self.input_list["valM"]
 
         self.output_list["new_pc"] = self.pc

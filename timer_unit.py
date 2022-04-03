@@ -60,9 +60,9 @@ class statusRegister(timerUnit):
             self.ZF = self.input_list["ZF"]
             self.SF = self.input_list["SF"]
             self.OF = self.input_list["OF"]
-            self.output_list["ZF"] = self.ZF
-            self.output_list["SF"] = self.SF
-            self.output_list["OF"] = self.OF
+        self.output_list["ZF"] = self.ZF
+        self.output_list["SF"] = self.SF
+        self.output_list["OF"] = self.OF
 
 
 
@@ -85,6 +85,8 @@ class dataMemory(timerUnit):
             "valM",       #输出数据
             "dmem_error"  #错误标志
         ]
+        self.valM = 0
+        self.dmem_error = False
 
     def low2high(self):
         """
@@ -107,18 +109,20 @@ class dataMemory(timerUnit):
             # 读取数据
             if self.input_list["mem_addr"] not in self.memory:
                 # 读取没有初始化的内存，报错
-                self.output_list["valM"] = 0
-                self.output_list["dmem_error"] = True
+                self.valM = 0
+                self.dmem_error = True
             else:
                 # 正常输出读取到的内存
-                self.output_list["valM"] = self.memory[self.input_list["mem_addr"]]
-                self.output_list["dmem_error"] = False
+                self.valM = self.memory[self.input_list["mem_addr"]]
+                self.dmem_error = False
         elif self.input_list["write_flag"]:
             # 写入数据
             self.memory[self.input_list["mem_addr"]] = self.input_list["mem_data"]
         else:
             # 读和写操作都没设置，什么都不做
             pass
+        self.output_list["valM"] = self.valM
+        self.output_list["dmem_error"] = self.dmem_error
 
 class registerFile(timerUnit):
     """
@@ -238,9 +242,17 @@ class programMemory(timerUnit):
         for i in range(start):
             self.memory[i] = "00"
 
+        byte = ""
+        double = False
         # 将地址开始后的字符串初始化为输入值
-        for byte in program_str[::2]:
-            self.memory.append(byte)
+        for bits in program_str:
+            byte += bits
+            if double:
+                double = False
+                self.memory.append(byte)
+                byte = ""
+            else:
+                double = True
 
         # 后面增加10位防止读取内存的时候获取不到
         for i in range(10):

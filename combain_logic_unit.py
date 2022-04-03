@@ -224,6 +224,9 @@ class srcB(logicUnit):
 
         self.output_list['srcB'] = self.srcB
 
+"""
+stage 3
+"""
 
 class SetCC(logicUnit):
     """
@@ -280,8 +283,6 @@ class ALU(logicUnit):
         self.output_list["valE"] = valE
 
 
-
-
 class aluA(logicUnit):
     """
     alu的第二个操作数
@@ -335,3 +336,139 @@ class ALUfun(logicUnit):
             self.output_list['alufun'] = self.input_list['ifun']
         else:
             self.output_list['alufun'] = '0'
+
+
+class Cond(logicUnit):
+
+    def __init__(self):
+        super(Cond,self).__init__()
+        self.input_key = ["ZF","SF","OF","ifun"]
+        self.output_key = ["Cnd"]
+        self.cnd = False
+
+    def exc_logic(self):
+        self.ZF = self.input_list["ZF"]
+        self.SF = self.input_list["SF"]
+        self.OF = self.input_list["OF"]
+        self.ifun = self.input_list["ifun"]
+        if self.ifun == '0':
+            self.cnd = True
+        if self.ifun == '1':
+            self.cnd = (self.SF ^ self.OF)|self.ZF
+        if self.ifun == "2":
+            self.cnd = self.SF ^ self.OF
+        if self.ifun == "3":
+            self.cnd = self.ZF
+        if self.ifun == "4":
+            self.cnd = not self.ZF
+        if self.ifun == "5":
+            self.cnd = not (self.SF ^ self.OF)
+        if self.ifun == "6":
+            self.cnd = not((self.SF ^ self.OF)|self.ZF)
+
+        self.output_list["Cnd"] = self.cnd
+
+"""
+stage 4
+"""
+
+class memRead(logicUnit):
+
+    def __init__(self):
+        super(memRead,self).__init__()
+        self.input_key = ["icode"]
+        self.output_key = ["mem_read"]
+
+    def exc_logic(self):
+        command_name = byte2command[self.input_list["icode"]]
+        self.output_list["mem_read"] = command_name in ["IMRMOVQ","IPOPQ",'IRET']
+
+
+class memWrite(logicUnit):
+
+    def __init__(self):
+        super(memWrite,self).__init__()
+        self.input_key = ["icode"]
+        self.output_key = ["mem_write"]
+
+    def exc_logic(self):
+        command_name = byte2command[self.input_list["icode"]]
+        self.output_list['mem_write'] = command_name in ["IRMMOVQ",'IPUSHQ','ICALL']
+
+
+class memAddr(logicUnit):
+
+    def __init__(self):
+        super(memAddr,self).__init__()
+        self.input_key = ["icode","valE",'valA']
+        self.output_key = ["mem_addr"]
+        self.addr = ""
+
+    def exc_logic(self):
+        command_name = byte2command[self.input_list["icode"]]
+        if command_name in ["IRMMOVQ","IPUSHQ","ICALL","IMRMOVQ"]:
+            self.addr = self.input_list["valE"]
+        if command_name in ["IPOPQ","IRET"]:
+            self.addr = self.input_list["valA"]
+        self.output_list["mem_addr"] = self.addr
+
+
+class memData(logicUnit):
+
+    def __init__(self):
+        super(memData,self).__init__()
+        self.input_key = ["valA","valP","icode"]
+        self.output_key = ["mem_data"]
+        self.data = ""
+
+    def exc_logic(self):
+        command_name = byte2command[self.input_list["icode"]]
+        if command_name in ["IRMMOVQ","IPUSHQ"]:
+            self.data = self.input_list["valA"]
+        if command_name == "ICALL":
+            self.data = self.input_list["valP"]
+        self.output_list["mem_data"] = self.data
+
+class Stat(logicUnit):
+
+    def __init__(self):
+        super(Stat,self).__init__()
+        self.input_key = ["imem_error","dmem_error",'instr_valid',"icode"]
+        self.output_key = ["Stat"]
+        self.stat = 0
+
+    def exc_logic(self):
+        if self.input_list["imem_error"] | self.input_list["dmem_error"]:
+            self.stat = 2
+        if not self.input_list["instr_valid"]:
+            self.stat = 3
+        if byte2command[self.input_list["icode"]] == "IHALT":
+            self.stat = 4
+        self.output_list["SAOK"] = self.stat
+
+
+"""
+stage 5
+"""
+
+class newPC(logicUnit):
+
+    def __init__(self):
+        super(newPC,self).__init__()
+        self.input_key = ["icode","Cnd","valC","valM","valP"]
+        self.output_key = ["new_pc"]
+        self.pc = ""
+
+    def exc_logic(self):
+        command_name = byte2command[self.input_list["icode"]]
+        self.pc = self.input_list["valP"]
+        if command_name == "ICALL":
+            self.pc = self.output_list["valC"]
+
+        if command_name == "IJXX" and self.input_list["Cnd"]:
+            self.pc = self.output_list["valC"]
+
+        if command_name == "IRET":
+            self.pc = self.output_list["valM"]
+
+        self.output_list["new_pc"] = self.pc

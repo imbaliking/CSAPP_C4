@@ -13,6 +13,8 @@ class programCounter(timerUnit):
         super(programCounter,self).__init__()
         # 程序计数器保存的当前指令地址，在电平没有变化前一直输出
         self.program_address = 0
+        self.input_key = ["PC"]
+        self.output_key = ["PC"]
 
     def low2high(self):
         """
@@ -29,6 +31,9 @@ class programCounter(timerUnit):
         if "PC" not in self.input_list:
             raise Exception("PC arg not in PC input_list")
         self.program_address = self.input_list["PC"]
+
+    def init_PC(self,PC):
+        self.program_address = PC
 
 
 class statusRegister(timerUnit):
@@ -48,23 +53,18 @@ class statusRegister(timerUnit):
 
     def low2high(self):
         """
-        电平从低到高时，将输出切换为存储的标志
+        电平从低到高时，将输出切换为输入的标志
         :return:
         """
-        self.output_list["ZF"] = self.ZF
-        self.output_list["SF"] = self.SF
-        self.output_list["OF"] = self.OF
+        if self.input_list["set_cc"]:
+            self.ZF = self.input_list["ZF"]
+            self.SF = self.input_list["SF"]
+            self.OF = self.input_list["OF"]
+            self.output_list["ZF"] = self.ZF
+            self.output_list["SF"] = self.SF
+            self.output_list["OF"] = self.OF
 
-    def high2low(self):
-        """
-        电平从高到低时，将输入存储起来
-        :return:
-        """
-        for key in self.input_list:
-            if not getattr(self,key):
-                raise Exception("%s not in statusRegister input_list"%(key))
-            if self.input_list["set_cc"]:
-                setattr(self,key,self.input_list[key])
+
 
 
 class dataMemory(timerUnit):

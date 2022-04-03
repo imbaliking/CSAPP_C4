@@ -27,6 +27,8 @@ class logicUnit(object):
 
         # 输入信号后马上检查是否缺失输入
         self.check_input()
+        # 基础逻辑在检验完输入后马上执行
+        self.exc_logic()
 
     def output_signal(self):
         """
